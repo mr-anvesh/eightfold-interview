@@ -1,11 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BriefcaseBusiness, Clock3, LogOut, Mic, Sparkles } from "lucide-react";
 import { clsx } from "clsx";
-import Vapi from "@vapi-ai/web";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { InterviewRecord, JobRecord, QAPair } from "@/lib/types";
 
@@ -53,29 +52,25 @@ export function DashboardShell({
   const [selectedInterviewId, setSelectedInterviewId] = useState<string>(
     initialInterviewId ?? interviews[0]?.id ?? "",
   );
+  const [roleInput, setRoleInput] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
+  const [skillsInput, setSkillsInput] = useState("");
+  const [jobDescriptionInput, setJobDescriptionInput] = useState("");
+  const [interviewFocusInput, setInterviewFocusInput] = useState("");
 
-  const [callActive, setCallActive] = useState(false);
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [manualTranscript, setManualTranscript] = useState("");
-  const [liveTranscript, setLiveTranscript] = useState("");
-  const [pending, setPending] = useState(false);
   const [statusText, setStatusText] = useState<string>("Ready to begin");
 
-  const selectedJob = jobs.find((job) => job.id === selectedJobId) ?? null;
   const selectedInterview = interviews.find((item) => item.id === selectedInterviewId) ?? null;
-
-  const vapi = useMemo(() => {
-    const publicKey = process.env.NEXT_PUBLIC_VAPI_PUBLIC_KEY;
-    if (!publicKey) {
-      return null;
-    }
-
-    try {
-      return new Vapi(publicKey);
-    } catch {
-      return null;
-    }
-  }, []);
+  const selectedSkills = skillsInput
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const resolvedRole = roleInput.trim();
+  const resolvedCompany = companyInput.trim() || "Generic";
+  const resolvedJobDescription =
+    jobDescriptionInput.trim() ||
+    `Interview simulation for ${resolvedRole || "the selected role"}. Focus on ${selectedSkills.join(", ") || "mixed"}.`;
+  const resolvedInterviewFocus = interviewFocusInput.trim() || selectedSkills.join(", ") || "mixed";
 
   const changeTab = (tab: TabKey) => {
     setActiveTab(tab);
@@ -97,106 +92,23 @@ export function DashboardShell({
   };
 
   const beginInterview = async () => {
-    if (!selectedJob) {
-      setStatusText("Pick a job before starting the interview.");
+    if (!resolvedRole) {
+      setStatusText("Enter the role before starting the interview.");
       return;
     }
 
-    setStatusText("Connecting to interviewer...");
-    setLiveTranscript("");
-    setManualTranscript("");
-    setCallActive(true);
-    setStartedAt(Date.now());
-
-    const assistantId = process.env.NEXT_PUBLIC_VAPI_ASSISTANT_ID;
-
-    if (vapi && assistantId) {
-      vapi.on("message", (message: unknown) => {
-        const transcriptChunk =
-          typeof message === "object" &&
-          message !== null &&
-          "transcript" in message &&
-          typeof (message as { transcript: unknown }).transcript === "string"
-            ? (message as { transcript: string }).transcript
-            : "";
-
-        if (transcriptChunk) {
-          setLiveTranscript((current) => `${current}\n${transcriptChunk}`.trim());
-        }
-      });
-
-      vapi.on("error", () => {
-        setStatusText("VAPI connection issue. You can still paste transcript manually.");
-      });
-
-      vapi.on("call-end", () => {
-        setStatusText("Call ended. Saving interview...");
-      });
-
-      await vapi.start(assistantId, {
-        variableValues: {
-          company_name: selectedJob.company_name,
-          role: selectedJob.title,
-          candidate_name: user.full_name,
-          job_description: selectedJob.job_description,
-          interview_focus: selectedJob.interview_focus || "mixed",
-        },
-      });
-      setStatusText("Live interview in progress");
+    if (selectedSkills.length === 0) {
+      setStatusText("Enter at least one interview skill.");
       return;
     }
 
-    setStatusText(
-      assistantId
-        ? "VAPI unavailable in this browser session. Paste transcript below and end the interview to continue."
-        : "VAPI key not configured. Paste transcript below and end the interview to continue.",
-    );
-  };
-
-  const endInterview = async () => {
-    if (!selectedJob) {
-      return;
-    }
-
-    setPending(true);
-    try {
-      if (vapi) {
-        await vapi.stop();
-      }
-
-      const durationSeconds = startedAt ? Math.round((Date.now() - startedAt) / 1000) : 0;
-      const transcript = (liveTranscript || manualTranscript).trim();
-
-      const response = await fetch("/api/interviews/complete", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          jobId: selectedJob.id,
-          rawTranscript:
-            transcript ||
-            `Interviewer: Tell me about your background. Candidate: I worked on core ${selectedJob.title} projects and improved product outcomes using measurable goals.`,
-          durationSeconds,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Unable to save interview.");
-      }
-
-      setStatusText("Interview processed. Refreshing history...");
-      router.refresh();
-      setCallActive(false);
-      setStartedAt(null);
-      setManualTranscript("");
-      setLiveTranscript("");
-      setActiveTab("history");
-    } catch (error) {
-      setStatusText(error instanceof Error ? error.message : "Unable to complete interview");
-    } finally {
-      setPending(false);
-    }
+    const params = new URLSearchParams();
+    params.set("role", resolvedRole);
+    params.set("company", resolvedCompany);
+    params.set("skills", selectedSkills.join(", "));
+    params.set("focus", resolvedInterviewFocus);
+    params.set("description", resolvedJobDescription);
+    router.push(`/dashboard/call?${params.toString()}`);
   };
 
   return (
@@ -256,62 +168,59 @@ export function DashboardShell({
               </div>
 
               <label className="block text-sm font-medium">
-                Select role
-                <select
-                  value={selectedJobId}
-                  onChange={(event) => setSelectedJobId(event.target.value)}
+                Enter role
+                <input
+                  value={roleInput}
+                  onChange={(event) => setRoleInput(event.target.value)}
+                  placeholder="e.g. Frontend Engineer"
                   className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                >
-                  {jobs.map((job) => (
-                    <option key={job.id} value={job.id}>
-                      {job.title} · {job.company_name}
-                    </option>
-                  ))}
-                </select>
+                />
               </label>
 
-              {selectedJob ? (
-                <div className="panel bg-cream p-4 text-sm">
-                  <p className="font-semibold text-ink">
-                    {selectedJob.title} · {selectedJob.company_name}
-                  </p>
-                  <p className="mt-1 text-muted">{selectedJob.description || selectedJob.job_description}</p>
-                </div>
-              ) : null}
+              <label className="block text-sm font-medium">
+                Enter company name
+                <input
+                  value={companyInput}
+                  onChange={(event) => setCompanyInput(event.target.value)}
+                  placeholder="e.g. Eightfold AI"
+                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
+                />
+              </label>
 
-              {callActive ? (
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3 rounded-md border border-fin/30 bg-fin/10 p-3 text-sm">
-                    <span className="pulse-dot" />
-                    Interview in progress
-                  </div>
+              <label className="block text-sm font-medium">
+                Enter interview skills (comma separated)
+                <input
+                  value={skillsInput}
+                  onChange={(event) => setSkillsInput(event.target.value)}
+                  placeholder="e.g. TypeScript, ReactJS, System Design"
+                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
+                />
+              </label>
 
-                  <label className="block text-sm">
-                    Transcript fallback (used when SDK transcript is unavailable)
-                    <textarea
-                      value={manualTranscript}
-                      onChange={(event) => setManualTranscript(event.target.value)}
-                      rows={7}
-                      placeholder="Paste transcript here if needed"
-                      className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                    />
-                  </label>
+              <label className="block text-sm font-medium">
+                Enter interview focus (optional)
+                <input
+                  value={interviewFocusInput}
+                  onChange={(event) => setInterviewFocusInput(event.target.value)}
+                  placeholder="e.g. frontend architecture and debugging"
+                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
+                />
+              </label>
 
-                  <div className="flex flex-wrap gap-3">
-                    <button
-                      onClick={endInterview}
-                      disabled={pending}
-                      className="btn btn-fin border border-fin px-4 py-2 text-sm font-semibold disabled:opacity-60"
-                    >
-                      {pending ? "Saving..." : "End Call"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button onClick={beginInterview} className="btn btn-primary border border-ink px-5 py-3 text-sm font-semibold">
-                  Begin Interview
-                </button>
-              )}
+              <label className="block text-sm font-medium">
+                Enter job description context (optional)
+                <textarea
+                  value={jobDescriptionInput}
+                  onChange={(event) => setJobDescriptionInput(event.target.value)}
+                  rows={4}
+                  placeholder="Paste job description or interview context"
+                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
+                />
+              </label>
+
+              <button onClick={beginInterview} className="btn btn-primary border border-ink px-5 py-3 text-sm font-semibold">
+                Begin Interview
+              </button>
             </section>
           ) : null}
 
@@ -393,6 +302,25 @@ export function DashboardShell({
                       {selectedInterview.interview_summaries?.[0]?.overall_summary ||
                         "Summary will appear here after interview processing."}
                     </p>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <article className="panel bg-cream p-3">
+                        <p className="label-mono text-[10px] text-muted">Strong Areas</p>
+                        <ul className="mt-2 space-y-2 text-sm">
+                          {(selectedInterview.interview_summaries?.[0]?.strengths || []).map((item, index) => (
+                            <li key={`strength-${index}`}>• {item}</li>
+                          ))}
+                        </ul>
+                      </article>
+                      <article className="panel bg-cream p-3">
+                        <p className="label-mono text-[10px] text-muted">Where To Improve</p>
+                        <ul className="mt-2 space-y-2 text-sm">
+                          {(selectedInterview.interview_summaries?.[0]?.improvements || []).map((item, index) => (
+                            <li key={`improvement-${index}`}>• {item}</li>
+                          ))}
+                        </ul>
+                      </article>
+                    </div>
 
                     <div className="max-h-[55vh] space-y-3 overflow-auto pr-1">
                       {(selectedInterview.interview_summaries?.[0]?.qa_pairs as QAPair[] | undefined)?.map(

@@ -81,6 +81,8 @@ export async function POST(request: Request) {
       {
         interview_id: interviewId,
         qa_pairs: summary.qaPairs,
+        strengths: summary.strengths,
+        improvements: summary.improvements,
         overall_summary: summary.overallSummary,
       },
       { onConflict: "interview_id" },

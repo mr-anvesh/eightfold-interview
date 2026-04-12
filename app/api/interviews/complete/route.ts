@@ -3,7 +3,11 @@ import { summarizeTranscript } from "@/lib/groq";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 const bodySchema = z.object({
-  jobId: z.string().uuid(),
+  jobId: z.string().uuid().nullable().optional(),
+  role: z.string().min(2),
+  companyName: z.string().optional(),
+  interviewFocus: z.string().optional(),
+  skills: z.array(z.string()).optional(),
   rawTranscript: z.string().min(1),
   durationSeconds: z.number().int().nonnegative().optional(),
 });
@@ -25,24 +29,37 @@ export async function POST(request: Request) {
       return Response.json({ error: "Invalid payload" }, { status: 400 });
     }
 
-    const { data: job, error: jobError } = await supabase
-      .from("jobs")
-      .select("id, title, company_name")
-      .eq("id", parsed.data.jobId)
-      .single();
+    let job: { id: string; title: string; company_name: string | null } | null = null;
 
-    if (jobError || !job) {
-      return Response.json({ error: "Selected job does not exist" }, { status: 404 });
+    if (parsed.data.jobId) {
+      const { data: selectedJob, error: jobError } = await supabase
+        .from("jobs")
+        .select("id, title, company_name")
+        .eq("id", parsed.data.jobId)
+        .single();
+
+      if (jobError || !selectedJob) {
+        return Response.json({ error: "Selected job does not exist" }, { status: 404 });
+      }
+
+      job = selectedJob;
     }
+
+    const role = parsed.data.role.trim();
+    const companyName = parsed.data.companyName?.trim() || job?.company_name || "Generic";
+    const skillsText = parsed.data.skills?.length
+      ? `\n\nInterview skills: ${parsed.data.skills.join(", ")}.`
+      : "";
+    const transcriptWithSkills = `${parsed.data.rawTranscript}${skillsText}`;
 
     const { data: interview, error: interviewError } = await supabase
       .from("interviews")
       .insert({
         user_id: user.id,
-        job_id: job.id,
-        role: job.title,
-        company_name: job.company_name,
-        raw_transcript: parsed.data.rawTranscript,
+        job_id: job?.id ?? null,
+        role,
+        company_name: companyName,
+        raw_transcript: transcriptWithSkills,
         duration_seconds: parsed.data.durationSeconds ?? null,
         status: "completed",
       })
@@ -53,11 +70,13 @@ export async function POST(request: Request) {
       return Response.json({ error: "Failed to persist interview" }, { status: 500 });
     }
 
-    const summary = await summarizeTranscript(parsed.data.rawTranscript);
+    const summary = await summarizeTranscript(transcriptWithSkills);
 
     const { error: summaryError } = await supabase.from("interview_summaries").insert({
       interview_id: interview.id,
       qa_pairs: summary.qaPairs,
+      strengths: summary.strengths,
+      improvements: summary.improvements,
       overall_summary: summary.overallSummary,
     });
 

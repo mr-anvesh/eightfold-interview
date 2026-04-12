@@ -44,7 +44,7 @@ export default async function DashboardPage({
     supabase
       .from("interviews")
       .select(
-        "id, role, company_name, duration_seconds, status, created_at, job_id, jobs(id, title, company_name), interview_summaries(qa_pairs, overall_summary)",
+        "id, role, company_name, duration_seconds, status, created_at, job_id, jobs(id, title, company_name), interview_summaries(qa_pairs, overall_summary, strengths, improvements)",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),

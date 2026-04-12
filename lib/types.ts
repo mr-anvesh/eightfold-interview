@@ -9,6 +9,8 @@ export type QAPair = {
 export type InterviewSummaryRecord = {
   qa_pairs: QAPair[];
   overall_summary: string;
+  strengths: string[] | null;
+  improvements: string[] | null;
 };
 
 export type JobRecord = {

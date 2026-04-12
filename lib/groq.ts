@@ -2,6 +2,8 @@ import { QAPair } from "@/lib/types";
 
 type SummaryResult = {
   qaPairs: QAPair[];
+  strengths: string[];
+  improvements: string[];
   overallSummary: string;
 };
 
@@ -14,11 +16,68 @@ function parseGroqJson(raw: string): SummaryResult {
     .replace(/^```\s*/i, "")
     .replace(/```$/i, "");
 
-  const parsed = JSON.parse(cleaned) as Array<Record<string, unknown>>;
+  const parsed = JSON.parse(cleaned) as unknown;
   const qaPairs: QAPair[] = [];
+  let strengths: string[] = [];
+  let improvements: string[] = [];
   let overallSummary = "The interview completed successfully.";
 
-  for (const item of parsed) {
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    !Array.isArray(parsed) &&
+    "qa_pairs" in parsed
+  ) {
+    const parsedObject = parsed as {
+      qa_pairs?: unknown;
+      strengths?: unknown;
+      improvements?: unknown;
+      overall_summary?: unknown;
+    };
+
+    if (Array.isArray(parsedObject.qa_pairs)) {
+      for (const item of parsedObject.qa_pairs) {
+        if (
+          typeof item === "object" &&
+          item !== null &&
+          typeof (item as { question?: unknown }).question === "string" &&
+          typeof (item as { answer?: unknown }).answer === "string" &&
+          ((item as { score?: unknown }).score === "strong" ||
+            (item as { score?: unknown }).score === "adequate" ||
+            (item as { score?: unknown }).score === "weak")
+        ) {
+          qaPairs.push({
+            question: (item as { question: string }).question,
+            answer: (item as { answer: string }).answer,
+            score: (item as { score: "strong" | "adequate" | "weak" }).score,
+          });
+        }
+      }
+    }
+
+    strengths = Array.isArray(parsedObject.strengths)
+      ? parsedObject.strengths.filter((item): item is string => typeof item === "string")
+      : [];
+
+    improvements = Array.isArray(parsedObject.improvements)
+      ? parsedObject.improvements.filter((item): item is string => typeof item === "string")
+      : [];
+
+    if (typeof parsedObject.overall_summary === "string") {
+      overallSummary = parsedObject.overall_summary;
+    }
+
+    return {
+      qaPairs,
+      strengths,
+      improvements,
+      overallSummary,
+    };
+  }
+
+  const parsedArray = Array.isArray(parsed) ? (parsed as Array<Record<string, unknown>>) : [];
+
+  for (const item of parsedArray) {
     if (typeof item.overall_summary === "string") {
       overallSummary = item.overall_summary;
       continue;
@@ -37,8 +96,20 @@ function parseGroqJson(raw: string): SummaryResult {
     }
   }
 
+  const strongAnswers = qaPairs.filter((pair) => pair.score === "strong");
+  const weakAnswers = qaPairs.filter((pair) => pair.score === "weak");
+
+  strengths = strongAnswers
+    .slice(0, 3)
+    .map((pair) => `Strong response on: ${pair.question.slice(0, 80)}${pair.question.length > 80 ? "..." : ""}`);
+  improvements = weakAnswers
+    .slice(0, 3)
+    .map((pair) => `Improve depth for: ${pair.question.slice(0, 80)}${pair.question.length > 80 ? "..." : ""}`);
+
   return {
     qaPairs,
+    strengths,
+    improvements,
     overallSummary,
   };
 }
@@ -68,8 +139,27 @@ function buildFallbackSummary(transcript: string): SummaryResult {
     }
   }
 
+  const strongCount = qaPairs.filter((pair) => pair.score === "strong").length;
+  const weakCount = qaPairs.filter((pair) => pair.score === "weak").length;
+  const strengths =
+    strongCount > 0
+      ? [
+          `${strongCount} answer(s) showed confidence and relevant detail.`,
+          "The candidate kept responses aligned with interview prompts.",
+        ]
+      : ["The candidate stayed engaged through the interview."];
+  const improvements =
+    weakCount > 0
+      ? [
+          `${weakCount} answer(s) need deeper technical detail.`,
+          "Use structured STAR-style examples for behavioral prompts.",
+        ]
+      : ["Add more measurable outcomes to further strengthen responses."];
+
   return {
     qaPairs: qaPairs.slice(0, 12),
+    strengths,
+    improvements,
     overallSummary:
       qaPairs.length > 0
         ? "The candidate completed a full mock interview. Review each answer for depth and clarity."
@@ -86,23 +176,28 @@ export async function summarizeTranscript(rawTranscript: string): Promise<Summar
 
   const prompt = `You are an expert interview analyst. Below is a raw transcript of a voice interview between an AI interviewer (Alex) and a job candidate.
 
-Your task is to extract every question asked by Alex and the corresponding answer given by the candidate. Return ONLY a valid JSON array with no extra text, markdown, or explanation.
+Your task is to extract every question asked by Alex and the corresponding answer given by the candidate. Return ONLY a valid JSON object with no extra text, markdown, or explanation.
 
 Format:
-[
-  {
-    "question": "...",
-    "answer": "...",
-    "score": "strong | adequate | weak"
-  }
-]
+{
+  "qa_pairs": [
+    {
+      "question": "...",
+      "answer": "...",
+      "score": "strong | adequate | weak"
+    }
+  ],
+  "strengths": ["...", "..."],
+  "improvements": ["...", "..."],
+  "overall_summary": "..."
+}
 
 Score each answer:
 - "strong" if the candidate gave a confident, detailed, and relevant answer
 - "adequate" if the answer was acceptable but lacked depth
 - "weak" if the candidate struggled, gave a very short answer, or said they didn't know
 
-Also append a final object with key "overall_summary" containing a 2-3 sentence summary of the candidate's overall performance.
+Add 2-4 bullet-style strings in "strengths" and "improvements" each. Keep each concise and actionable.
 
 Transcript:
 ${rawTranscript}`;
