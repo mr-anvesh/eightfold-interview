@@ -6,6 +6,13 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup";
 
+function getAuthRedirectUrl() {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  const baseUrl = siteUrl && siteUrl.length > 0 ? siteUrl : window.location.origin;
+
+  return `${baseUrl.replace(/\/$/, "")}/auth`;
+}
+
 export function AuthPanel() {
   const router = useRouter();
   const getSupabase = () => getSupabaseBrowserClient();
@@ -30,6 +37,7 @@ export function AuthPanel() {
           email,
           password,
           options: {
+            emailRedirectTo: getAuthRedirectUrl(),
             data: {
               full_name: fullName,
             },
