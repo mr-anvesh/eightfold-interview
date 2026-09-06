@@ -1,0 +1,119 @@
+\documentclass[a4paper,9pt]{article}
+\usepackage[left=0.7in, right=0.7in, top=0.7in, bottom=0.7in]{geometry}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{fontawesome5}
+\usepackage{xcolor}
+
+% ATS-friendly section formatting
+\titleformat{\section}{\large\bfseries}{}{0em}{}[\titlerule]
+\titlespacing{\section}{0pt}{10pt}{6pt}
+
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+% ──────────────────── HEADER ────────────────────
+\begin{center}
+    {\LARGE \textbf{Anvesh Mishra}} \\[6pt]
+    \href{mailto:anveshmishra100@gmail.com}{\faEnvelope\ anveshmishra100@gmail.com}
+    \quad $|$ \quad
+    \faPhone\ +91-9457740019
+    \quad $|$ \quad
+    \href{https://linkedin.com/in/anvesh-mishra}{\faLinkedin\ linkedin.com/in/anvesh-mishra}
+    \\[3pt]
+    \href{https://github.com/mr-anvesh}{\faGithub\ github.com/mr-anvesh}
+    \quad $|$ \quad
+    \href{https://anvesh.dev}{\faGlobe\ anvesh.dev}
+\end{center}
+
+\vspace{-6pt}
+
+% ──────────────────── EDUCATION ────────────────────
+\section*{Education}
+
+\textbf{B.Tech in Computer Science Engineering} \hfill 2024 -- Present \\
+Bennett University \hfill CGPA: 8.18
+
+\vspace{4pt}
+\textbf{Senior Secondary (CBSE)} \hfill 2023 \\
+Percentage: 90.8\%
+
+\vspace{4pt}
+\textbf{Secondary (CBSE)} \hfill 2021 \\
+Percentage: 92.5\%
+
+\vspace{5pt}
+
+% ──────────────────── PROJECTS ────────────────────
+\section*{Projects}
+
+% Project 1
+\textbf{ORBIT -- AI 911 Dispatch Response System $|$ Full Stack Development}
+\hfill \href{https://orbit.anvesh.dev/}{\faExternalLinkAlt\ Live} \\
+\textit{Next.js, React, Supabase, Twilio, TTS, STT, LLM API, Webhooks}
+\vspace{-4pt}
+\begin{itemize}[noitemsep, topsep=0pt, leftmargin=*]
+    \item Built a production-style voice AI system to convert emergency calls into structured incidents and dispatch workflows using Next.js, Mappls API, MCP and LLM.
+    \item Designed end-to-end voice pipeline integrating STT, LLM-based classification, and outbound call automation via Twilio.
+    \item Engineered webhook pipelines for handling call events, retries, and data normalization across services.
+\end{itemize}
+
+\vspace{2pt}
+
+% Project 2
+\textbf{InterviewAI -- AI Mock Interview Platform $|$ Full Stack Development}
+\hfill \href{https://eightfold-interview.vercel.app/}{\faExternalLinkAlt\ Live} \\
+\textit{Next.js, TypeScript, React, Supabase, VAPI, Groq LLM, Zod, Tailwind CSS}
+\vspace{-4pt}
+\begin{itemize}[noitemsep, topsep=0pt, leftmargin=*]
+    \item Built an AI-powered mock interview platform with real-time voice interview simulation, role-specific context injection, and manual transcript fallback for reliability.
+    \item Engineered end-to-end interview completion and webhook pipelines to persist transcripts and generate structured Q\&A summaries with strengths and improvements using Groq LLM.
+    \item Implemented secure authentication and data isolation, SSR session handling, and Row-Level Security across dashboard, interview history, and job template workflows.
+\end{itemize}
+
+\vspace{2pt}
+
+% Project 3
+\textbf{Cal AI -- AI-Powered Calorie Tracker $|$ Full Stack Development}
+\hfill \href{https://cal-ai.anvesh.dev/}{\faExternalLinkAlt\ Live} \\
+\textit{Next.js, TypeScript, React, Tailwind CSS, Supabase, LLM API, Framer Motion, Recharts}
+\vspace{-4pt}
+\begin{itemize}[noitemsep, topsep=0pt, leftmargin=*]
+    \item Built an AI-first nutrition tracker using Next.js, Supabase, and LLM API enabling users to scan meals and estimate macros via photo or text input.
+    \item Implemented Auth with Row-Level Security (RLS) to ensure user-specific data isolation and secure meal history storage.
+    \item Developed personalized goal management with progress visualization using Recharts, streak tracking, and a mobile-first UI built with Tailwind CSS and Framer Motion.
+\end{itemize}
+
+\vspace{5pt}
+
+% ──────────────────── TECHNICAL SKILLS ────────────────────
+\section*{Technical Skills}
+
+\textbf{Languages:} Python, JavaScript, React, C++, Java, SQL \\
+\textbf{Backend:} FastAPI, Django, Flask, Node.js, Express \\
+\textbf{AI/ML:} Transformers, NLP, LLMs, STT/TTS Pipelines \\
+\textbf{Systems:} APIs, Webhooks, Async Processing, Event-driven Systems, Git \\
+\textbf{Databases:} PostgreSQL, MySQL, MongoDB \\
+
+\vspace{5pt}
+
+% ──────────────────── RELEVANT COURSEWORK ────────────────────
+\section*{Relevant Coursework}
+
+Data Structures \& Algorithms, DBMS, OOP (Python \& Java), Operating Systems, Probability \& Statistics, Linear Algebra, Full Stack Development, Microprocessors, Design Thinking \& Innovation, Design and Analysis of Algorithms, Computer Networks
+
+\vspace{5pt}
+
+% ──────────────────── ACHIEVEMENTS ────────────────────
+\section*{Achievements}
+
+\begin{itemize}[noitemsep, topsep=0pt, leftmargin=*]
+    \item Winner, Hackathon at BITS Pilani (APOGEE 2025)
+    \item Winner, ACM Bennett University Hackathon
+    \item 1st-Runner Up, Mappls Tech Hackathon, BITS Pilani (APOGEE 2026)
+\end{itemize}
+
+\end{document}

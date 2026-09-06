@@ -6,13 +6,6 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Mode = "signin" | "signup";
 
-function getAuthRedirectUrl() {
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  const baseUrl = siteUrl && siteUrl.length > 0 ? siteUrl : window.location.origin;
-
-  return `${baseUrl.replace(/\/$/, "")}/auth`;
-}
-
 export function AuthPanel() {
   const router = useRouter();
   const getSupabase = () => getSupabaseBrowserClient();
@@ -23,42 +16,32 @@ export function AuthPanel() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const onSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setLoading(true);
     setError(null);
-    setMessage(null);
 
     try {
       if (mode === "signup") {
-        const { data, error: signUpError } = await getSupabase().auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: getAuthRedirectUrl(),
-            data: {
-              full_name: fullName,
-            },
-          },
+        const res = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password, full_name: fullName }),
         });
 
-        if (signUpError) {
-          throw signUpError;
+        const body = await res.json();
+        if (!res.ok) {
+          throw new Error(body.error || "Signup failed.");
         }
 
-        if (data.user) {
-          await getSupabase().from("users").upsert({
-            id: data.user.id,
-            email,
-            full_name: fullName,
-          });
-        }
+        const { error: signInError } = await getSupabase().auth.signInWithPassword({
+          email,
+          password,
+        });
 
-        if (!data.session) {
-          setMessage("Account created. If email confirmation is enabled, check your inbox.");
-          return;
+        if (signInError) {
+          throw signInError;
         }
       } else {
         const { error: signInError } = await getSupabase().auth.signInWithPassword({
@@ -145,7 +128,6 @@ export function AuthPanel() {
         </label>
 
         {error ? <p className="text-sm text-red-700">{error}</p> : null}
-        {message ? <p className="text-sm text-leaf">{message}</p> : null}
 
         <button
           type="submit"
