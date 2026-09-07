@@ -1,14 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, Clock3, LogOut, Mic, Sparkles } from "lucide-react";
+import { BriefcaseBusiness, Clock3, LogOut, Mic, Sparkles, UserCircle, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { clsx } from "clsx";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { InterviewRecord, JobRecord, QAPair } from "@/lib/types";
+import { ProfilePanel } from "@/components/dashboard/profile-panel";
 
-type TabKey = "start" | "history" | "jobs";
+type TabKey = "start" | "history" | "jobs" | "profile";
 
 type DashboardShellProps = {
   user: {
@@ -44,9 +45,22 @@ export function DashboardShell({
 }: DashboardShellProps) {
   const router = useRouter();
   const getSupabase = () => getSupabaseBrowserClient();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, []);
 
   const [activeTab, setActiveTab] = useState<TabKey>(
-    initialTab === "history" || initialTab === "jobs" ? initialTab : "start",
+    initialTab === "history" || initialTab === "jobs" || initialTab === "profile" ? initialTab : "start",
   );
   const [selectedJobId, setSelectedJobId] = useState<string>(initialJobId ?? jobs[0]?.id ?? "");
   const [selectedInterviewId, setSelectedInterviewId] = useState<string>(
@@ -117,21 +131,63 @@ export function DashboardShell({
         <Link href="/" className="label-mono text-xs text-fin">
           InterviewAI
         </Link>
-        <div className="flex items-center gap-3 text-sm">
-          <div className="hidden text-right sm:block">
-            <p className="font-semibold">{user.full_name}</p>
-            <p className="text-muted">{user.email}</p>
-          </div>
-          <button onClick={onLogout} className="btn btn-outline flex items-center gap-2 px-3 py-2 text-xs font-semibold">
-            <LogOut size={14} /> Logout
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setMenuOpen((prev) => !prev)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-ink text-sm font-semibold text-cream hover:opacity-80 transition-opacity"
+            aria-label="User menu"
+          >
+            {(user.full_name || user.email)
+              .split(" ")
+              .map((w) => w[0])
+              .join("")
+              .slice(0, 2)
+              .toUpperCase()}
           </button>
+          {menuOpen ? (
+            <div className="panel absolute right-0 top-12 z-50 w-56 overflow-hidden shadow-lg">
+              <div className="border-b border-oat px-4 py-3">
+                <p className="truncate text-sm font-semibold">{user.full_name}</p>
+                <p className="truncate text-xs text-muted">{user.email}</p>
+              </div>
+              <div className="p-1.5">
+                <button
+                  onClick={() => { setMenuOpen(false); changeTab("profile"); }}
+                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-oat/40 transition-colors"
+                >
+                  <UserCircle size={15} /> Profile
+                </button>
+                <button
+                  onClick={() => { setMenuOpen(false); onLogout(); }}
+                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <LogOut size={15} /> Logout
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
       </header>
 
       <div className="flex flex-1 flex-col md:flex-row">
-        <aside className="border-b border-oat p-4 md:w-64 md:border-b-0 md:border-r md:p-5">
-          <p className="label-mono mb-3 text-xs text-muted">Workspace</p>
-          <nav className="grid gap-2">
+        <aside
+          className={clsx(
+            "flex shrink-0 flex-col overflow-hidden border-b border-oat transition-all duration-200 md:border-b-0 md:border-r",
+            sidebarOpen ? "p-4 md:w-64 md:p-5" : "p-2 md:w-14 md:p-2",
+          )}
+        >
+          <div className={clsx("mb-3 flex items-center", sidebarOpen ? "justify-between" : "justify-center")}>
+            {sidebarOpen ? <p className="label-mono text-xs text-muted">Workspace</p> : null}
+            <button
+              onClick={() => setSidebarOpen((prev) => !prev)}
+              title={sidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+              className="hidden md:flex btn border border-oat bg-paper p-1.5 hover:border-ink"
+            >
+              {sidebarOpen ? <PanelLeftClose size={15} /> : <PanelLeftOpen size={15} />}
+            </button>
+          </div>
+
+          <nav className="grid gap-1.5">
             {[
               { key: "start", label: "Start Interview", icon: Mic },
               { key: "history", label: "History", icon: Clock3 },
@@ -142,18 +198,38 @@ export function DashboardShell({
                 <button
                   key={item.key}
                   onClick={() => changeTab(item.key as TabKey)}
+                  title={!sidebarOpen ? item.label : undefined}
                   className={clsx(
-                    "btn flex items-center gap-2 border px-3 py-2 text-sm text-left",
+                    "btn flex w-full items-center gap-2 border py-2 text-sm",
+                    sidebarOpen ? "px-3 text-left" : "justify-center px-0",
                     activeTab === item.key
                       ? "btn-primary border-ink"
                       : "border-oat bg-paper text-ink hover:border-ink",
                   )}
                 >
-                  <Icon size={16} /> {item.label}
+                  <Icon size={16} className="shrink-0" />
+                  {sidebarOpen ? <span className="truncate">{item.label}</span> : null}
                 </button>
               );
             })}
           </nav>
+
+          <div className="mt-auto border-t border-oat pt-3">
+            <button
+              onClick={() => changeTab("profile")}
+              title={!sidebarOpen ? "Profile" : undefined}
+              className={clsx(
+                "btn flex w-full items-center gap-2 border py-2 text-sm",
+                sidebarOpen ? "px-3 text-left" : "justify-center px-0",
+                activeTab === "profile"
+                  ? "btn-primary border-ink"
+                  : "border-oat bg-paper text-ink hover:border-ink",
+              )}
+            >
+              <User size={16} className="shrink-0" />
+              {sidebarOpen ? <span className="truncate">Profile</span> : null}
+            </button>
+          </div>
         </aside>
 
         <main className="flex-1 p-5 sm:p-8">
@@ -340,6 +416,12 @@ export function DashboardShell({
                   <p className="mt-4 text-sm text-muted">Select a completed interview to inspect details.</p>
                 )}
               </div>
+            </section>
+          ) : null}
+
+          {activeTab === "profile" ? (
+            <section className="fade-up">
+              <ProfilePanel user={user} />
             </section>
           ) : null}
         </main>
