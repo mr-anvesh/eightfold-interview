@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { summarizeTranscript } from "@/lib/groq";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { cleanTranscriptToFullSentences } from "@/lib/transcript-cleaner";
 
 const bodySchema = z.object({
   jobId: z.string().uuid().nullable().optional(),
@@ -47,10 +48,11 @@ export async function POST(request: Request) {
 
     const role = parsed.data.role.trim();
     const companyName = parsed.data.companyName?.trim() || job?.company_name || "Generic";
+    const cleanedRaw = cleanTranscriptToFullSentences(parsed.data.rawTranscript);
     const skillsText = parsed.data.skills?.length
       ? `\n\nInterview skills: ${parsed.data.skills.join(", ")}.`
       : "";
-    const transcriptWithSkills = `${parsed.data.rawTranscript}${skillsText}`;
+    const transcriptWithSkills = `${cleanedRaw}${skillsText}`;
 
     const { data: interview, error: interviewError } = await supabase
       .from("interviews")

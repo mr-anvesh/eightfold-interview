@@ -3,13 +3,28 @@
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { BriefcaseBusiness, Clock3, LogOut, Mic, Sparkles, UserCircle, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  BriefcaseBusiness,
+  Clock3,
+  LogOut,
+  Mic,
+  UserCircle,
+  User,
+  PanelLeftClose,
+  PanelLeftOpen,
+  FileText,
+  Search,
+  ArrowRight,
+} from "lucide-react";
 import { clsx } from "clsx";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { InterviewRecord, JobRecord, QAPair } from "@/lib/types";
+import { InterviewRecord, JobRecord } from "@/lib/types";
+import { getSkillsForJob } from "@/lib/job-templates";
 import { ProfilePanel } from "@/components/dashboard/profile-panel";
+import { ResumeAnalysisPanel } from "@/components/dashboard/resume-analysis-panel";
+import { HistoryView } from "@/components/dashboard/history-view";
 
-type TabKey = "start" | "history" | "jobs" | "profile";
+type TabKey = "start" | "history" | "jobs" | "resume" | "profile";
 
 type DashboardShellProps = {
   user: {
@@ -23,17 +38,6 @@ type DashboardShellProps = {
   initialJobId?: string;
   initialInterviewId?: string;
 };
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds || Number.isNaN(seconds)) {
-    return "--";
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remain = Math.floor(seconds % 60)
-    .toString()
-    .padStart(2, "0");
-  return `${minutes}:${remain}`;
-}
 
 export function DashboardShell({
   user,
@@ -60,21 +64,29 @@ export function DashboardShell({
   }, []);
 
   const [activeTab, setActiveTab] = useState<TabKey>(
-    initialTab === "history" || initialTab === "jobs" || initialTab === "profile" ? initialTab : "start",
+    initialTab === "history" || initialTab === "jobs" || initialTab === "resume" || initialTab === "profile" ? initialTab : "start",
   );
   const [selectedJobId, setSelectedJobId] = useState<string>(initialJobId ?? jobs[0]?.id ?? "");
   const [selectedInterviewId, setSelectedInterviewId] = useState<string>(
-    initialInterviewId ?? interviews[0]?.id ?? "",
+    initialInterviewId ?? "",
   );
-  const [roleInput, setRoleInput] = useState("");
-  const [companyInput, setCompanyInput] = useState("");
-  const [skillsInput, setSkillsInput] = useState("");
-  const [jobDescriptionInput, setJobDescriptionInput] = useState("");
-  const [interviewFocusInput, setInterviewFocusInput] = useState("");
 
-  const [statusText, setStatusText] = useState<string>("Ready to begin");
+  // Initialize with initial matched job details if initialJobId is provided
+  const initialMatchedJob = initialJobId ? jobs.find((j) => j.id === initialJobId) : null;
+  const [roleInput, setRoleInput] = useState(initialMatchedJob?.title ?? "");
+  const [companyInput, setCompanyInput] = useState(initialMatchedJob?.company_name ?? "");
+  const [skillsInput, setSkillsInput] = useState(initialMatchedJob ? getSkillsForJob(initialMatchedJob) : "");
+  const [jobDescriptionInput, setJobDescriptionInput] = useState(initialMatchedJob?.job_description ?? "");
+  const [interviewFocusInput, setInterviewFocusInput] = useState(initialMatchedJob?.interview_focus ?? "");
 
-  const selectedInterview = interviews.find((item) => item.id === selectedInterviewId) ?? null;
+  // Template marketplace state
+  const [templateCategory, setTemplateCategory] = useState<string>("all");
+  const [templateSearch, setTemplateSearch] = useState<string>("");
+
+  const [statusText, setStatusText] = useState<string>(
+    initialMatchedJob ? `Template loaded: ${initialMatchedJob.title}` : "Ready to begin",
+  );
+
   const selectedSkills = skillsInput
     .split(",")
     .map((item) => item.trim())
@@ -96,6 +108,28 @@ export function DashboardShell({
     if (selectedInterviewId) {
       params.set("interview", selectedInterviewId);
     }
+    router.replace(`/dashboard?${params.toString()}`);
+  };
+
+  /**
+   * Loads all details from an interview template into the Start Interview Page
+   * and switches the view to "start" so the user can begin immediately.
+   */
+  const handleSelectTemplate = (job: JobRecord) => {
+    setSelectedJobId(job.id);
+    setRoleInput(job.title);
+    setCompanyInput(job.company_name || "General Tech");
+    const skills = getSkillsForJob(job);
+    setSkillsInput(skills);
+    setInterviewFocusInput(job.interview_focus || "Technical problem-solving and architectural depth");
+    setJobDescriptionInput(job.job_description || job.description || "");
+    setStatusText(`Template loaded: ${job.title}. Ready to begin.`);
+
+    // Switch to start tab
+    setActiveTab("start");
+    const params = new URLSearchParams();
+    params.set("tab", "start");
+    params.set("job", job.id);
     router.replace(`/dashboard?${params.toString()}`);
   };
 
@@ -125,6 +159,23 @@ export function DashboardShell({
     router.push(`/dashboard/call?${params.toString()}`);
   };
 
+  // Filter templates for the marketplace
+  const engineeringCount = jobs.filter((j) => j.category.toLowerCase() === "engineering").length;
+  const filteredTemplates = jobs.filter((job) => {
+    const matchesCategory =
+      templateCategory === "all" ||
+      job.category.toLowerCase() === templateCategory.toLowerCase();
+    const q = templateSearch.toLowerCase().trim();
+    if (!q) return matchesCategory;
+    const skills = getSkillsForJob(job).toLowerCase();
+    const matchesSearch =
+      job.title.toLowerCase().includes(q) ||
+      (job.company_name && job.company_name.toLowerCase().includes(q)) ||
+      skills.includes(q) ||
+      (job.description && job.description.toLowerCase().includes(q));
+    return matchesCategory && matchesSearch;
+  });
+
   return (
     <div className="grain flex min-h-screen flex-col bg-cream">
       <header className="flex items-center justify-between border-b border-oat px-5 py-4 sm:px-7">
@@ -153,15 +204,15 @@ export function DashboardShell({
               <div className="p-1.5">
                 <button
                   onClick={() => { setMenuOpen(false); changeTab("profile"); }}
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm hover:bg-oat/40 transition-colors"
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs hover:bg-cream"
                 >
-                  <UserCircle size={15} /> Profile
+                  <UserCircle size={14} /> Profile
                 </button>
                 <button
-                  onClick={() => { setMenuOpen(false); onLogout(); }}
-                  className="flex w-full items-center gap-2 rounded-sm px-3 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  onClick={onLogout}
+                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-xs text-danger hover:bg-cream"
                 >
-                  <LogOut size={15} /> Logout
+                  <LogOut size={14} /> Log out
                 </button>
               </div>
             </div>
@@ -169,14 +220,19 @@ export function DashboardShell({
         </div>
       </header>
 
-      <div className="flex flex-1 flex-col md:flex-row">
+      <div className="flex flex-1">
         <aside
           className={clsx(
-            "flex shrink-0 flex-col overflow-hidden border-b border-oat transition-all duration-200 md:border-b-0 md:border-r",
-            sidebarOpen ? "p-4 md:w-64 md:p-5" : "p-2 md:w-14 md:p-2",
+            "flex flex-col border-r border-oat bg-cream p-3 transition-all duration-200",
+            sidebarOpen ? "w-64" : "w-16 items-center",
           )}
         >
-          <div className={clsx("mb-3 flex items-center", sidebarOpen ? "justify-between" : "justify-center")}>
+          <div
+            className={clsx(
+              "mb-4 flex items-center pt-1",
+              sidebarOpen ? "justify-between px-2" : "justify-center",
+            )}
+          >
             {sidebarOpen ? <p className="label-mono text-xs text-muted">Workspace</p> : null}
             <button
               onClick={() => setSidebarOpen((prev) => !prev)}
@@ -191,7 +247,8 @@ export function DashboardShell({
             {[
               { key: "start", label: "Start Interview", icon: Mic },
               { key: "history", label: "History", icon: Clock3 },
-              { key: "jobs", label: "Apply for Jobs", icon: BriefcaseBusiness },
+              { key: "jobs", label: "Interview Templates", icon: BriefcaseBusiness },
+              { key: "resume", label: "Resume Analysis", icon: FileText },
             ].map((item) => {
               const Icon = item.icon;
               return (
@@ -234,189 +291,294 @@ export function DashboardShell({
 
         <main className="flex-1 p-5 sm:p-8">
           {activeTab === "start" ? (
-            <section className="panel fade-up space-y-5 p-5 sm:p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+            <section className="panel fade-up space-y-6 p-6 sm:p-8 bg-paper">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-oat pb-5">
                 <div>
-                  <p className="label-mono text-xs text-muted">Start Interview</p>
-                  <h2 className="mt-1 text-4xl">Voice Simulation</h2>
+                  <p className="label-mono text-xs text-fin font-semibold">Start Interview</p>
+                  <h2 className="mt-1 text-3xl sm:text-4xl font-normal text-ink">Voice Simulation</h2>
+                  <p className="text-serif mt-1.5 text-sm text-muted">
+                    Configure your mock interview role, skills, and focus before starting the audio session with Neha.
+                  </p>
                 </div>
-                <span className="rounded-sm border border-oat bg-paper px-3 py-1 text-xs">{statusText}</span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-[4px] border border-oat bg-[#faf9f6] px-3 py-1 text-xs font-mono text-ink">
+                    {statusText}
+                  </span>
+                  <button
+                    onClick={() => changeTab("jobs")}
+                    className="btn btn-outline px-3 py-1 text-xs font-semibold bg-white hover:border-ink"
+                  >
+                    Browse Templates &rarr;
+                  </button>
+                </div>
               </div>
 
-              <label className="block text-sm font-medium">
-                Enter role
-                <input
-                  value={roleInput}
-                  onChange={(event) => setRoleInput(event.target.value)}
-                  placeholder="e.g. Frontend Engineer"
-                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                />
-              </label>
+              <div className="grid gap-5">
+                <div className="grid gap-5 sm:grid-cols-2">
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider">
+                    Role Title
+                    <input
+                      value={roleInput}
+                      onChange={(event) => setRoleInput(event.target.value)}
+                      placeholder="e.g. Distributed Systems Engineer"
+                      className="mt-1.5 w-full rounded-[4px] border border-oat bg-paper px-3.5 py-2.5 text-sm text-ink outline-none focus:border-ink font-normal"
+                    />
+                  </label>
 
-              <label className="block text-sm font-medium">
-                Enter company name
-                <input
-                  value={companyInput}
-                  onChange={(event) => setCompanyInput(event.target.value)}
-                  placeholder="e.g. Eightfold AI"
-                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                />
-              </label>
+                  <label className="block text-xs font-semibold text-ink uppercase tracking-wider">
+                    Target Company
+                    <input
+                      value={companyInput}
+                      onChange={(event) => setCompanyInput(event.target.value)}
+                      placeholder="e.g. Google, Stripe, Meta"
+                      className="mt-1.5 w-full rounded-[4px] border border-oat bg-paper px-3.5 py-2.5 text-sm text-ink outline-none focus:border-ink font-normal"
+                    />
+                  </label>
+                </div>
 
-              <label className="block text-sm font-medium">
-                Enter interview skills (comma separated)
-                <input
-                  value={skillsInput}
-                  onChange={(event) => setSkillsInput(event.target.value)}
-                  placeholder="e.g. TypeScript, ReactJS, System Design"
-                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                />
-              </label>
+                <label className="block text-xs font-semibold text-ink uppercase tracking-wider">
+                  Target Interview Skills (comma separated)
+                  <input
+                    value={skillsInput}
+                    onChange={(event) => setSkillsInput(event.target.value)}
+                    placeholder="e.g. Go, Raft, Distributed Storage, Fault Tolerance, Kafka"
+                    className="mt-1.5 w-full rounded-[4px] border border-oat bg-paper px-3.5 py-2.5 text-sm text-ink outline-none focus:border-ink font-normal font-mono"
+                  />
+                  <span className="mt-1 block text-[11px] text-muted font-normal lowercase tracking-normal">
+                    Neha will evaluate your responses based on these specific technical competencies.
+                  </span>
+                </label>
 
-              <label className="block text-sm font-medium">
-                Enter interview focus (optional)
-                <input
-                  value={interviewFocusInput}
-                  onChange={(event) => setInterviewFocusInput(event.target.value)}
-                  placeholder="e.g. frontend architecture and debugging"
-                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                />
-              </label>
+                <label className="block text-xs font-semibold text-ink uppercase tracking-wider">
+                  Interview Focus & Evaluation Rubric (optional)
+                  <input
+                    value={interviewFocusInput}
+                    onChange={(event) => setInterviewFocusInput(event.target.value)}
+                    placeholder="e.g. Consensus protocols, replication, and failover under network partitions"
+                    className="mt-1.5 w-full rounded-[4px] border border-oat bg-paper px-3.5 py-2.5 text-sm text-ink outline-none focus:border-ink font-normal"
+                  />
+                </label>
 
-              <label className="block text-sm font-medium">
-                Enter job description context (optional)
-                <textarea
-                  value={jobDescriptionInput}
-                  onChange={(event) => setJobDescriptionInput(event.target.value)}
-                  rows={4}
-                  placeholder="Paste job description or interview context"
-                  className="mt-1 w-full rounded-md border border-oat bg-paper px-3 py-2 outline-none focus:border-ink"
-                />
-              </label>
+                <label className="block text-xs font-semibold text-ink uppercase tracking-wider">
+                  Job Description Context (optional)
+                  <textarea
+                    value={jobDescriptionInput}
+                    onChange={(event) => setJobDescriptionInput(event.target.value)}
+                    rows={4}
+                    placeholder="Paste job description or requirements to give Neha realistic context on your role."
+                    className="mt-1.5 w-full rounded-[4px] border border-oat bg-paper p-3.5 text-xs text-ink outline-none focus:border-ink font-normal leading-relaxed"
+                  />
+                </label>
+              </div>
 
-              <button onClick={beginInterview} className="btn btn-primary border border-ink px-5 py-3 text-sm font-semibold">
-                Begin Interview
-              </button>
+              <div className="flex items-center justify-between pt-4 border-t border-oat">
+                <span className="text-xs text-muted font-mono">
+                  Engine: Vapi Real-Time Voice + Groq LLaMA 3
+                </span>
+                <button
+                  onClick={beginInterview}
+                  className="btn btn-primary px-7 py-3 text-sm font-semibold flex items-center gap-2 shadow-xs"
+                >
+                  <span>Begin Interview</span>
+                  <ArrowRight size={14} />
+                </button>
+              </div>
             </section>
           ) : null}
 
           {activeTab === "jobs" ? (
-            <section className="fade-up space-y-4">
-              <div>
-                <p className="label-mono text-xs text-muted">Marketplace</p>
-                <h2 className="mt-1 text-4xl">Interview Templates</h2>
+            <section className="fade-up space-y-6">
+              {/* Header */}
+              <div className="panel p-6 sm:p-8 bg-paper">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="label-mono text-xs text-fin font-semibold">ROLE TEMPLATES & BENCHMARKS</p>
+                    <h2 className="mt-1 text-3xl sm:text-4xl font-normal text-ink">Interview Templates</h2>
+                    <p className="text-serif mt-2 text-sm text-muted max-w-2xl leading-relaxed">
+                      Select any engineering or technical role to automatically fill the Start Interview Page with calibrated skills, evaluation focus, and benchmark questions.
+                    </p>
+                  </div>
+
+                  <span className="label-mono text-xs text-muted">
+                    {filteredTemplates.length} {filteredTemplates.length === 1 ? "template available" : "templates available"}
+                  </span>
+                </div>
+
+                {/* Search & Category Filter Bar */}
+                <div className="mt-6 flex flex-wrap items-center justify-between gap-4 pt-5 border-t border-oat">
+                  {/* Category Pills */}
+                  <div className="flex flex-wrap items-center gap-1.5 bg-[#faf9f6] p-1 rounded-[4px] border border-oat">
+                    {[
+                      { key: "all", label: `All (${jobs.length})` },
+                      { key: "engineering", label: `Engineering (${engineeringCount})` },
+                      { key: "product", label: "Product" },
+                      { key: "data", label: "Data" },
+                      { key: "design", label: "Design" },
+                      { key: "marketing", label: "Marketing" },
+                    ].map((tab) => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setTemplateCategory(tab.key)}
+                        className={clsx(
+                          "rounded-[3px] px-2.5 py-1 text-xs font-mono transition-all",
+                          templateCategory === tab.key
+                            ? "bg-ink text-white font-semibold"
+                            : "text-muted hover:text-ink",
+                        )}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Search Input */}
+                  <div className="relative flex-1 max-w-sm">
+                    <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
+                    <input
+                      type="text"
+                      placeholder="Search roles, tech stack, skills..."
+                      value={templateSearch}
+                      onChange={(e) => setTemplateSearch(e.target.value)}
+                      className="w-full rounded-[4px] border border-oat bg-paper pl-9 pr-3.5 py-1.5 text-xs text-ink placeholder:text-muted focus:border-ink focus:outline-none"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {jobs.map((job, index) => (
-                  <article
-                    key={job.id}
-                    className="panel relative overflow-hidden p-4"
-                    style={{ animationDelay: `${index * 50}ms` }}
-                  >
-                    <div className="absolute right-0 top-0 h-16 w-16 rounded-bl-full bg-fin/10" />
-                    <p className="label-mono text-[10px] text-muted">{job.category}</p>
-                    <h3 className="mt-2 text-2xl">{job.title}</h3>
-                    <p className="mt-1 text-sm text-muted">{job.company_name}</p>
-                    <p className="mt-3 text-sm">{job.description || job.job_description.slice(0, 120)}</p>
-                    <div className="mt-4 flex items-center justify-between">
-                      <span className="rounded-sm border border-oat bg-paper px-2 py-1 text-xs">{job.difficulty}</span>
-                      <button
-                        onClick={() => {
-                          setSelectedJobId(job.id);
-                          changeTab("start");
-                        }}
-                        className="btn btn-outline px-3 py-1 text-xs font-semibold"
+              {/* Templates Grid */}
+              {filteredTemplates.length === 0 ? (
+                <div className="panel p-12 text-center text-xs text-muted bg-paper">
+                  No interview templates matched your criteria.
+                </div>
+              ) : (
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {filteredTemplates.map((job, index) => {
+                    const skillsList = getSkillsForJob(job).split(",").map((s) => s.trim());
+                    return (
+                      <article
+                        key={job.id}
+                        onClick={() => handleSelectTemplate(job)}
+                        className="panel p-5 bg-paper hover:border-ink transition-all cursor-pointer group shadow-xs hover:shadow-sm flex flex-col justify-between"
+                        style={{ animationDelay: `${(index % 12) * 35}ms` }}
                       >
-                        Practice this role
-                      </button>
-                    </div>
-                  </article>
-                ))}
-              </div>
+                        <div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="rounded-[3px] border border-oat bg-[#faf9f6] px-2 py-0.5 text-[10px] font-mono text-muted uppercase">
+                                {job.category}
+                              </span>
+                              <span className="rounded-[3px] border border-oat bg-[#faf9f6] px-2 py-0.5 text-[10px] font-mono text-ink">
+                                {job.company_name}
+                              </span>
+                            </div>
+
+                            <span
+                              className={clsx(
+                                "shrink-0 rounded-[3px] px-2 py-0.5 text-[10px] font-mono font-bold",
+                                job.difficulty === "Senior"
+                                  ? "bg-[#fe4c02]/15 text-[#fe4c02]"
+                                  : job.difficulty === "Mid"
+                                  ? "bg-[#0bdf50]/15 text-[#0b6b29]"
+                                  : "bg-[#65b5ff]/15 text-[#004ba0]",
+                              )}
+                            >
+                              {job.difficulty}
+                            </span>
+                          </div>
+
+                          <h3 className="mt-3 text-lg font-medium text-ink group-hover:text-fin transition-colors">
+                            {job.title}
+                          </h3>
+
+                          <p className="mt-2 text-xs text-muted leading-relaxed line-clamp-2 text-serif">
+                            {job.description || job.job_description.slice(0, 140)}
+                          </p>
+
+                          {/* Skills preview tags */}
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {skillsList.slice(0, 3).map((skill, idx) => (
+                              <span
+                                key={idx}
+                                className="rounded-[3px] border border-oat/70 bg-[#faf9f6] px-1.5 py-0.5 text-[10px] font-mono text-ink/80"
+                              >
+                                {skill}
+                              </span>
+                            ))}
+                            {skillsList.length > 3 && (
+                              <span className="text-[10px] font-mono text-muted self-center">
+                                +{skillsList.length - 3} more
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-4 pt-3 border-t border-oat/70 flex items-center justify-between">
+                          <span className="text-[11px] text-muted font-mono truncate max-w-[160px]">
+                            {job.interview_focus ? job.interview_focus.split(",")[0] : "Standard Rubric"}
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSelectTemplate(job);
+                            }}
+                            className="btn btn-primary px-3 py-1.5 text-xs font-semibold group-hover:bg-fin transition-colors flex items-center gap-1"
+                          >
+                            <span>Practice Role</span>
+                            <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
             </section>
           ) : null}
 
           {activeTab === "history" ? (
-            <section className="fade-up grid gap-5 lg:grid-cols-[0.9fr_1.1fr]">
-              <div className="panel p-4 sm:p-5">
-                <p className="label-mono text-xs text-muted">Interview History</p>
-                <div className="mt-4 grid gap-3">
-                  {interviews.length === 0 ? (
-                    <p className="text-sm text-muted">No interviews yet. Start one from the Start Interview tab.</p>
-                  ) : null}
+            <HistoryView
+              interviews={interviews}
+              selectedInterviewId={selectedInterviewId}
+              onSelectInterview={(id) => setSelectedInterviewId(id)}
+              onStartRoleAgain={(role, company) => {
+                const matched = jobs.find(
+                  (j) =>
+                    j.title.toLowerCase() === role.toLowerCase() ||
+                    role.toLowerCase().includes(j.title.toLowerCase()),
+                );
+                if (matched) {
+                  handleSelectTemplate(matched);
+                } else {
+                  setRoleInput(role);
+                  setCompanyInput(company);
+                  setSkillsInput("System Architecture, Problem Solving, Communication");
+                  changeTab("start");
+                }
+              }}
+              onNavigateToStart={() => changeTab("start")}
+            />
+          ) : null}
 
-                  {interviews.map((item) => (
-                    <button
-                      key={item.id}
-                      onClick={() => setSelectedInterviewId(item.id)}
-                      className={clsx(
-                        "btn panel w-full p-3 text-left",
-                        selectedInterviewId === item.id ? "border-ink" : "border-oat",
-                      )}
-                    >
-                      <p className="font-semibold">{item.role}</p>
-                      <p className="text-sm text-muted">{item.company_name || item.jobs?.company_name || "Generic"}</p>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted">
-                        <span>{new Date(item.created_at).toLocaleDateString()}</span>
-                        <span>{formatDuration(item.duration_seconds)}</span>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="panel p-4 sm:p-5">
-                <div className="flex items-center gap-2">
-                  <Sparkles size={16} />
-                  <p className="label-mono text-xs text-muted">Structured Q&A Summary</p>
-                </div>
-                {selectedInterview ? (
-                  <div className="mt-4 space-y-4">
-                    <h3 className="text-3xl">{selectedInterview.role}</h3>
-                    <p className="text-sm text-muted">
-                      {selectedInterview.interview_summaries?.[0]?.overall_summary ||
-                        "Summary will appear here after interview processing."}
-                    </p>
-
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <article className="panel bg-cream p-3">
-                        <p className="label-mono text-[10px] text-muted">Strong Areas</p>
-                        <ul className="mt-2 space-y-2 text-sm">
-                          {(selectedInterview.interview_summaries?.[0]?.strengths || []).map((item, index) => (
-                            <li key={`strength-${index}`}>• {item}</li>
-                          ))}
-                        </ul>
-                      </article>
-                      <article className="panel bg-cream p-3">
-                        <p className="label-mono text-[10px] text-muted">Where To Improve</p>
-                        <ul className="mt-2 space-y-2 text-sm">
-                          {(selectedInterview.interview_summaries?.[0]?.improvements || []).map((item, index) => (
-                            <li key={`improvement-${index}`}>• {item}</li>
-                          ))}
-                        </ul>
-                      </article>
-                    </div>
-
-                    <div className="max-h-[55vh] space-y-3 overflow-auto pr-1">
-                      {(selectedInterview.interview_summaries?.[0]?.qa_pairs as QAPair[] | undefined)?.map(
-                        (qa, index) => (
-                          <article key={`${qa.question}-${index}`} className="panel bg-cream p-3">
-                            <p className="text-sm font-semibold">Q: {qa.question}</p>
-                            <p className="mt-2 text-sm text-[#2e2d2a]">A: {qa.answer}</p>
-                            <span className="mt-3 inline-block rounded-sm border border-oat bg-paper px-2 py-1 text-[11px] uppercase tracking-wide text-muted">
-                              {qa.score}
-                            </span>
-                          </article>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="mt-4 text-sm text-muted">Select a completed interview to inspect details.</p>
-                )}
-              </div>
-            </section>
+          {activeTab === "resume" ? (
+            <ResumeAnalysisPanel
+              onStartInterviewWithRole={(role) => {
+                const matched = jobs.find(
+                  (j) =>
+                    j.title.toLowerCase().includes(role.toLowerCase()) ||
+                    role.toLowerCase().includes(j.title.toLowerCase()),
+                );
+                if (matched) {
+                  handleSelectTemplate(matched);
+                } else {
+                  setRoleInput(role);
+                  setCompanyInput("Target Tech Company");
+                  setSkillsInput("System Design, Coding & Data Structures, Technical Communication");
+                  changeTab("start");
+                }
+              }}
+            />
           ) : null}
 
           {activeTab === "profile" ? (

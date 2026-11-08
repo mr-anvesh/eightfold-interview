@@ -1,34 +1,9 @@
 import type { Metadata } from "next";
-import { IBM_Plex_Mono, Manrope, Source_Serif_4, Syne } from "next/font/google";
 import "./globals.css";
 
-const display = Syne({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const sans = Manrope({
-  variable: "--font-sans",
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-});
-
-const serif = Source_Serif_4({
-  variable: "--font-serif",
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
-});
-
-const mono = IBM_Plex_Mono({
-  variable: "--font-mono",
-  subsets: ["latin"],
-  weight: ["400", "500"],
-});
-
 export const metadata: Metadata = {
-  title: "InterviewAI",
-  description: "AI-powered voice interviews for modern job prep.",
+  title: "InterviewAI — AI-Powered Voice Mock Interviews",
+  description: "Adaptive voice mock interviews with role-specific context and scored Q&A breakdowns.",
 };
 
 export default function RootLayout({
@@ -37,10 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html
-      lang="en"
-      className={`${display.variable} ${sans.variable} ${serif.variable} ${mono.variable} h-full antialiased`}
-    >
+    <html lang="en" className="h-full antialiased">
       <body className="min-h-full flex flex-col bg-cream text-ink">{children}</body>
     </html>
   );

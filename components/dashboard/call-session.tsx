@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Mic, PhoneOff } from "lucide-react";
 import Vapi from "@vapi-ai/web";
+import { cleanTranscriptToFullSentences } from "@/lib/transcript-cleaner";
 
 type CallSessionProps = {
   candidateName: string;
@@ -64,16 +65,52 @@ export function CallSession({ candidateName, context }: CallSessionProps) {
         setStatus("Connecting to AI interviewer...");
 
         vapi.on("message", (message: unknown) => {
-          const transcriptChunk =
-            typeof message === "object" &&
-            message !== null &&
-            "transcript" in message &&
-            typeof (message as { transcript: unknown }).transcript === "string"
-              ? (message as { transcript: string }).transcript
-              : "";
+          if (typeof message !== "object" || message === null) return;
+          const msg = message as {
+            type?: string;
+            transcriptType?: string;
+            transcript?: string;
+            role?: string;
+            conversation?: Array<{ role?: string; content?: string }>;
+          };
 
-          if (transcriptChunk) {
-            setLiveTranscript((current) => `${current}\n${transcriptChunk}`.trim());
+          // If Vapi provides full conversation update, use authoritative dialogue turns
+          if (msg.type === "conversation-update" && Array.isArray(msg.conversation)) {
+            const formatted = msg.conversation
+              .filter((c) => c.content && c.content.trim())
+              .map((c) => {
+                const label = c.role === "assistant" ? "Neha (Interviewer)" : "Candidate";
+                return `${label}: ${c.content?.trim()}`;
+              })
+              .join("\n\n");
+            if (formatted) {
+              setLiveTranscript(formatted);
+              return;
+            }
+          }
+
+          // Skip partial streaming words to avoid waterfall of words
+          if (msg.transcriptType === "partial") {
+            return;
+          }
+
+          if (typeof msg.transcript === "string" && msg.transcript.trim()) {
+            const role = (msg.role || "").toLowerCase();
+            const speakerLabel = role === "assistant" ? "Neha (Interviewer)" : "Candidate";
+            const newText = msg.transcript.trim();
+
+            setLiveTranscript((current) => {
+              if (!current) {
+                return `${speakerLabel}: ${newText}`;
+              }
+              const lines = current.split("\n");
+              const lastLine = lines[lines.length - 1] || "";
+              if (lastLine.startsWith(`${speakerLabel}:`)) {
+                lines[lines.length - 1] = `${lastLine} ${newText}`;
+                return lines.join("\n").trim();
+              }
+              return `${current}\n\n${speakerLabel}: ${newText}`.trim();
+            });
           }
         });
 
@@ -130,7 +167,8 @@ export function CallSession({ candidateName, context }: CallSessionProps) {
         await vapi.stop();
       }
 
-      const transcript = (liveTranscript || manualTranscript).trim();
+      const raw = (liveTranscript || manualTranscript).trim();
+      const transcript = cleanTranscriptToFullSentences(raw);
 
       const response = await fetch("/api/interviews/complete", {
         method: "POST",

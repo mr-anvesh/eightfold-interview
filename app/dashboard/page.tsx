@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { InterviewRecord, JobRecord } from "@/lib/types";
+import { getMergedJobTemplates } from "@/lib/job-templates";
 
 type SearchParams = {
   tab?: string;
@@ -44,7 +45,7 @@ export default async function DashboardPage({
     supabase
       .from("interviews")
       .select(
-        "id, role, company_name, duration_seconds, status, created_at, job_id, jobs(id, title, company_name), interview_summaries(qa_pairs, overall_summary, strengths, improvements)",
+        "id, role, company_name, duration_seconds, status, raw_transcript, created_at, job_id, jobs(id, title, company_name), interview_summaries(qa_pairs, overall_summary, strengths, improvements)",
       )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false }),
@@ -64,12 +65,15 @@ export default async function DashboardPage({
       company_name: item.company_name,
       duration_seconds: item.duration_seconds,
       status: item.status,
+      raw_transcript: item.raw_transcript,
       created_at: item.created_at,
       job_id: item.job_id,
       jobs: normalizedJob,
       interview_summaries: normalizedSummaries,
     };
   });
+
+  const allJobTemplates = getMergedJobTemplates(jobs as JobRecord[]);
 
   return (
     <DashboardShell
@@ -78,7 +82,7 @@ export default async function DashboardPage({
         email: user.email ?? profile?.email ?? "unknown",
         full_name: profile?.full_name ?? user.user_metadata?.full_name ?? "Candidate",
       }}
-      jobs={jobs as JobRecord[]}
+      jobs={allJobTemplates}
       interviews={normalizedInterviews}
       initialTab={params.tab}
       initialJobId={params.job}
