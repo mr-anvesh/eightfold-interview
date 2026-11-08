@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { summarizeTranscript } from "@/lib/groq";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { cleanTranscriptToFullSentences } from "@/lib/transcript-cleaner";
 
 const webhookSchema = z.object({
   interview_id: z.string().uuid().optional(),
@@ -30,7 +31,7 @@ export async function POST(request: Request) {
     }
 
     const admin = createSupabaseAdminClient();
-    const transcript = parsed.data.transcript;
+    const transcript = cleanTranscriptToFullSentences(parsed.data.transcript);
     const summary = await summarizeTranscript(transcript);
 
     let interviewId = parsed.data.interview_id;

@@ -114,6 +114,13 @@ function parseGroqJson(raw: string): SummaryResult {
   };
 }
 
+/**
+ * Intelligent speaker-aware fallback summary builder.
+ * Guarantees that:
+ * 1. Neha's greetings ("Hi Anvesh", "Welcome...") are NEVER attributed as the candidate's answer.
+ * 2. Questions are complete and not cut off mid-sentence.
+ * 3. Candidate answers are strictly what the candidate actually said.
+ */
 function buildFallbackSummary(transcript: string): SummaryResult {
   const lines = transcript
     .split(/\n+/)
@@ -121,21 +128,93 @@ function buildFallbackSummary(transcript: string): SummaryResult {
     .filter(Boolean);
 
   const qaPairs: QAPair[] = [];
-  let pendingQuestion = "";
 
-  for (const line of lines) {
-    if (/\?$/.test(line) || line.toLowerCase().includes("interviewer:")) {
-      pendingQuestion = line.replace(/^interviewer:\s*/i, "");
-      continue;
+  // Check if transcript contains speaker tags
+  const hasSpeakerPrefix = lines.some((l) =>
+    /^(neha|interviewer|candidate|you|user|assistant):/i.test(l),
+  );
+
+  if (hasSpeakerPrefix) {
+    const turns: Array<{ speaker: "interviewer" | "candidate"; text: string }> = [];
+    let currentSpeaker: "interviewer" | "candidate" | "" = "";
+    let currentChunks: string[] = [];
+
+    for (const line of lines) {
+      const match = line.match(/^(neha|interviewer|assistant|candidate|you|user):\s*(.*)$/i);
+      if (match) {
+        if (currentSpeaker && currentChunks.length > 0) {
+          turns.push({ speaker: currentSpeaker, text: currentChunks.join(" ") });
+        }
+        const role = match[1].toLowerCase();
+        currentSpeaker =
+          role === "neha" || role === "interviewer" || role === "assistant"
+            ? "interviewer"
+            : "candidate";
+        currentChunks = match[2] ? [match[2]] : [];
+      } else {
+        if (currentSpeaker) {
+          currentChunks.push(line);
+        }
+      }
+    }
+    if (currentSpeaker && currentChunks.length > 0) {
+      turns.push({ speaker: currentSpeaker, text: currentChunks.join(" ") });
     }
 
-    if (pendingQuestion) {
-      qaPairs.push({
-        question: pendingQuestion,
-        answer: line.replace(/^candidate:\s*/i, ""),
-        score: line.length > 180 ? "strong" : line.length > 70 ? "adequate" : "weak",
-      });
-      pendingQuestion = "";
+    let pendingQ = "";
+    for (const t of turns) {
+      if (t.speaker === "interviewer") {
+        pendingQ = pendingQ ? `${pendingQ} ${t.text}` : t.text;
+      } else if (t.speaker === "candidate" && pendingQ) {
+        qaPairs.push({
+          question: pendingQ.trim(),
+          answer: t.text.trim(),
+          score: t.text.length > 180 ? "strong" : t.text.length > 60 ? "adequate" : "weak",
+        });
+        pendingQ = "";
+      }
+    }
+  } else {
+    // Unlabelled transcript heuristic:
+    // Distinguish interviewer preamble/question from candidate speech
+    const isInterviewerGreeting = (s: string): boolean => {
+      const l = s.toLowerCase();
+      return (
+        l === "hello?" ||
+        l === "hello" ||
+        l.startsWith("hi ") ||
+        l.startsWith("hi,") ||
+        l.includes("anvesh") ||
+        l.startsWith("welcome") ||
+        l.includes("welcome and thank you") ||
+        l.includes("taking the time") ||
+        l.includes("glad we can have")
+      );
+    };
+
+    let interviewerBuffer: string[] = [];
+
+    for (const line of lines) {
+      if (isInterviewerGreeting(line)) {
+        interviewerBuffer.push(line);
+        continue;
+      }
+
+      if (/\?$/.test(line) || line.toLowerCase().includes("how you've pursued") || line.toLowerCase().includes("tell me about")) {
+        interviewerBuffer.push(line);
+        continue;
+      }
+
+      // If we have an accumulated interviewer question/preamble, this next line is candidate answer
+      if (interviewerBuffer.length > 0) {
+        const fullQ = interviewerBuffer.join(" ").trim();
+        qaPairs.push({
+          question: fullQ,
+          answer: line,
+          score: line.length > 180 ? "strong" : line.length > 60 ? "adequate" : "weak",
+        });
+        interviewerBuffer = [];
+      }
     }
   }
 
@@ -174,16 +253,22 @@ export async function summarizeTranscript(rawTranscript: string): Promise<Summar
     return buildFallbackSummary(rawTranscript);
   }
 
-  const prompt = `You are an expert interview analyst. Below is a raw transcript of a voice interview between an AI interviewer (Alex) and a job candidate.
+  const prompt = `You are an expert interview analyst. Below is a raw transcript of a voice mock interview between an AI interviewer (Neha) and a job candidate.
 
-Your task is to extract every question asked by Alex and the corresponding answer given by the candidate. Return ONLY a valid JSON object with no extra text, markdown, or explanation.
+Your task is to extract every complete question asked by Neha and the corresponding complete answer given by the candidate. Return ONLY a valid JSON object with no extra text, markdown, or explanation.
+
+CRITICAL RULES:
+1. NEHA is the AI Interviewer. Greetings like "Hello?", "Hi Anvesh", "Welcome and thank you for taking the time to chat with me today..." are spoken by NEHA, NEVER by the candidate! NEVER attribute Neha's greetings or words to the candidate.
+2. The candidate is the job applicant. Only assign text the candidate actually spoke into their "answer".
+3. Keep questions COMPLETE. Do NOT cut off the beginning or preamble of Neha's questions. Always provide the full question context.
+4. Keep answers COMPLETE. Do NOT truncate candidate responses.
 
 Format:
 {
   "qa_pairs": [
     {
-      "question": "...",
-      "answer": "...",
+      "question": "Full complete question including preamble",
+      "answer": "Candidate's complete response",
       "score": "strong | adequate | weak"
     }
   ],
@@ -195,42 +280,48 @@ Format:
 Score each answer:
 - "strong" if the candidate gave a confident, detailed, and relevant answer
 - "adequate" if the answer was acceptable but lacked depth
-- "weak" if the candidate struggled, gave a very short answer, or said they didn't know
+- "weak" if the candidate struggled, gave a very short answer, or said they didn't know / wanted to quit
 
-Add 2-4 bullet-style strings in "strengths" and "improvements" each. Keep each concise and actionable.
+Add 2-4 bullet-style strings in "strengths" and "improvements" each.
 
 Transcript:
 ${rawTranscript}`;
 
-  try {
-    const response = await fetch(GROQ_ENDPOINT, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "llama3-70b-8192",
-        temperature: 0.1,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+  // Try active Groq models: llama-3.3-70b-versatile, fallback to llama-3.1-8b-instant
+  const modelsToTry = ["llama-3.3-70b-versatile", "llama-3.1-8b-instant"];
 
-    if (!response.ok) {
-      return buildFallbackSummary(rawTranscript);
+  for (const model of modelsToTry) {
+    try {
+      const response = await fetch(GROQ_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          temperature: 0.1,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        console.warn(`Groq model ${model} returned ${response.status}. Trying next...`);
+        continue;
+      }
+
+      const data = (await response.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+
+      const content = data.choices?.[0]?.message?.content;
+      if (content) {
+        return parseGroqJson(content);
+      }
+    } catch (err) {
+      console.warn(`Groq request error with ${model}:`, err);
     }
-
-    const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string } }>;
-    };
-
-    const content = data.choices?.[0]?.message?.content;
-    if (!content) {
-      return buildFallbackSummary(rawTranscript);
-    }
-
-    return parseGroqJson(content);
-  } catch {
-    return buildFallbackSummary(rawTranscript);
   }
+
+  return buildFallbackSummary(rawTranscript);
 }

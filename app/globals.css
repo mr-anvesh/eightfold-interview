@@ -8,6 +8,24 @@
   --fin: #ff5600;
   --leaf: #2c6415;
   --paper: #fffefb;
+  --sand: #d3cec6;
+  --black-80: #313130;
+  --black-60: #626260;
+  --black-50: #7b7b78;
+
+  /* Report Palette from DESIGN.md */
+  --report-blue: #65b5ff;
+  --report-green: #0bdf50;
+  --report-red: #c41c1c;
+  --report-pink: #ff2067;
+  --report-lime: #b3e01c;
+  --report-orange: #fe4c02;
+  --deep-blue: #0007cb;
+
+  --font-display: "Saans", "Saans Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-sans: "Saans", "Saans Fallback", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-serif: "Serrif", "Serrif Fallback", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono: "SaansMono", "SaansMono Fallback", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 @theme inline {
@@ -18,6 +36,17 @@
   --color-fin: var(--fin);
   --color-leaf: var(--leaf);
   --color-paper: var(--paper);
+  --color-sand: var(--sand);
+  --color-black-80: var(--black-80);
+  --color-black-60: var(--black-60);
+  --color-black-50: var(--black-50);
+  --color-report-blue: var(--report-blue);
+  --color-report-green: var(--report-green);
+  --color-report-red: var(--report-red);
+  --color-report-pink: var(--report-pink);
+  --color-report-lime: var(--report-lime);
+  --color-report-orange: var(--report-orange);
+  --color-deep-blue: var(--deep-blue);
   --font-display: var(--font-display);
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
@@ -28,33 +57,78 @@
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background:
-    radial-gradient(circle at 15% 20%, #fff5ea 0%, transparent 32%),
-    radial-gradient(circle at 85% 5%, #f2f7ff 0%, transparent 24%),
+    radial-gradient(circle at 15% 15%, #fff5ea 0%, transparent 35%),
+    radial-gradient(circle at 85% 5%, #f2f7ff 0%, transparent 28%),
     var(--cream);
   color: var(--ink);
   font-family: var(--font-sans), sans-serif;
   min-height: 100vh;
 }
 
+/* Headings with exact DESIGN.md specifications */
 h1,
 h2,
 h3,
 h4 {
   font-family: var(--font-display), sans-serif;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  font-weight: 400;
+  line-height: 1.00;
+}
+
+.display-hero {
+  font-size: clamp(48px, 7.5vw, 80px);
+  line-height: 1.00;
+  letter-spacing: -2.4px;
+}
+
+.section-title {
+  font-size: clamp(34px, 5vw, 54px);
+  line-height: 1.00;
+  letter-spacing: -1.6px;
+}
+
+.sub-title {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.00;
+  letter-spacing: -1.2px;
+}
+
+.card-title {
+  font-size: clamp(24px, 3vw, 32px);
+  line-height: 1.00;
+  letter-spacing: -0.96px;
+}
+
+.feature-title {
+  font-size: clamp(19px, 2.5vw, 24px);
+  line-height: 1.00;
+  letter-spacing: -0.48px;
+}
+
+.body-emphasis {
+  font-size: 20px;
+  line-height: 0.95;
+  letter-spacing: -0.2px;
 }
 
 .text-serif {
   font-family: var(--font-serif), serif;
+  letter-spacing: -0.16px;
+  line-height: 1.40;
 }
 
 .label-mono {
   font-family: var(--font-mono), monospace;
-  letter-spacing: 0.1em;
+  font-size: 12px;
+  letter-spacing: 0.8px;
   text-transform: uppercase;
+  line-height: 1.20;
 }
 
 .grain::before {
@@ -62,9 +136,10 @@ h4 {
   position: fixed;
   inset: 0;
   pointer-events: none;
-  opacity: 0.05;
+  opacity: 0.04;
   background-image: radial-gradient(#000 0.6px, transparent 0.6px);
   background-size: 3px 3px;
+  z-index: 999;
 }
 
 .panel {
@@ -73,9 +148,19 @@ h4 {
   border-radius: 8px;
 }
 
+.panel-card {
+  background: #faf9f6;
+  border: 1px solid var(--oat);
+  border-radius: 8px;
+}
+
+/* Sharp 4px border radius as defined in DESIGN.md */
 .btn {
   border-radius: 4px;
-  transition: transform 150ms ease, background-color 150ms ease, color 150ms ease;
+  transition: transform 140ms ease, background-color 140ms ease, color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .btn:hover {
@@ -88,13 +173,20 @@ h4 {
 
 .btn-primary {
   background: var(--ink);
-  color: #fff;
+  color: #ffffff;
+  border: 1px solid var(--ink);
 }
 
 .btn-primary:hover {
-  background: #fff;
+  background: #ffffff;
   color: var(--ink);
   border-color: var(--ink);
+}
+
+.btn-primary:active {
+  background: var(--leaf);
+  color: #ffffff;
+  border-color: var(--leaf);
 }
 
 .btn-outline {
@@ -103,9 +195,46 @@ h4 {
   color: var(--ink);
 }
 
+.btn-outline:hover {
+  background: #ffffff;
+  border-color: var(--ink);
+}
+
 .btn-fin {
   background: var(--fin);
-  color: #fff;
+  color: #ffffff;
+  border: 1px solid var(--fin);
+}
+
+.btn-fin:hover {
+  background: #e04b00;
+  border-color: #e04b00;
+  color: #ffffff;
+}
+
+/* Report Badges */
+.badge-strong {
+  background: color-mix(in oklab, var(--report-green) 18%, #ffffff 82%);
+  color: #0b6b29;
+  border: 1px solid color-mix(in oklab, var(--report-green) 40%, transparent 60%);
+}
+
+.badge-adequate {
+  background: color-mix(in oklab, var(--report-blue) 20%, #ffffff 80%);
+  color: #004ba0;
+  border: 1px solid color-mix(in oklab, var(--report-blue) 40%, transparent 60%);
+}
+
+.badge-weak {
+  background: color-mix(in oklab, var(--report-red) 16%, #ffffff 84%);
+  color: var(--report-red);
+  border: 1px solid color-mix(in oklab, var(--report-red) 35%, transparent 65%);
+}
+
+.badge-fin {
+  background: color-mix(in oklab, var(--fin) 15%, #ffffff 85%);
+  color: var(--fin);
+  border: 1px solid color-mix(in oklab, var(--fin) 35%, transparent 65%);
 }
 
 .fade-up {
@@ -113,17 +242,26 @@ h4 {
 }
 
 .pulse-dot {
-  width: 10px;
-  height: 10px;
+  width: 8px;
+  height: 8px;
   border-radius: 9999px;
   background: var(--fin);
-  animation: pulse-dot 1.1s infinite;
+  animation: pulse-dot 1.2s infinite ease-in-out;
+}
+
+.pulse-green {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: #00da00;
+  box-shadow: 0 0 0 0 rgba(0, 218, 0, 0.4);
+  animation: pulse-green 1.8s infinite;
 }
 
 @keyframes fade-up {
   from {
     opacity: 0;
-    transform: translateY(10px);
+    transform: translateY(12px);
   }
   to {
     opacity: 1;
@@ -134,11 +272,50 @@ h4 {
 @keyframes pulse-dot {
   0%,
   100% {
-    transform: scale(0.8);
+    transform: scale(0.85);
     opacity: 0.6;
   }
   50% {
-    transform: scale(1.15);
+    transform: scale(1.2);
     opacity: 1;
   }
 }
+
+@keyframes pulse-green {
+  0% {
+    box-shadow: 0 0 0 0 rgba(0, 218, 0, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(0, 218, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(0, 218, 0, 0);
+  }
+}
+
+/* Sound Wave animation for interactive voice simulation */
+@keyframes soundwave-1 {
+  0%, 100% { height: 6px; }
+  50% { height: 28px; }
+}
+
+@keyframes soundwave-2 {
+  0%, 100% { height: 14px; }
+  50% { height: 36px; }
+}
+
+@keyframes soundwave-3 {
+  0%, 100% { height: 22px; }
+  50% { height: 10px; }
+}
+
+@keyframes soundwave-4 {
+  0%, 100% { height: 8px; }
+  50% { height: 32px; }
+}
+
+.animate-wave-1 { animation: soundwave-1 0.8s ease-in-out infinite; }
+.animate-wave-2 { animation: soundwave-2 0.65s ease-in-out infinite; }
+.animate-wave-3 { animation: soundwave-3 0.9s ease-in-out infinite; }
+.animate-wave-4 { animation: soundwave-4 0.75s ease-in-out infinite; }
+
